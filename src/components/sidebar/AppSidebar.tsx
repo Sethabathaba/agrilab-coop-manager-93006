@@ -19,7 +19,8 @@ import {
   Banknote,
   BarChart3,
   Shield,
-  Cog
+  Cog,
+  FolderOpen
 } from "lucide-react";
 
 import {
@@ -43,6 +44,11 @@ const menuItems = [
     title: "Dashboard",
     url: "/",
     icon: LayoutDashboard,
+  },
+  {
+    title: "Documents",
+    url: "/documents",
+    icon: FolderOpen,
   },
   {
     title: "Members",
