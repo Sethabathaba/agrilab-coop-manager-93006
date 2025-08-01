@@ -12,8 +12,29 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 export function DashboardHeader() {
+  const { data: logo } = useQuery({
+    queryKey: ['logo'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('documents')
+        .select('file_url, name')
+        .ilike('name', '%logo%')
+        .limit(1)
+        .single();
+      
+      if (error) {
+        console.log('No logo found:', error);
+        return null;
+      }
+      
+      return data;
+    },
+  });
+
   return (
     <header className="border-b bg-card/50 backdrop-blur supports-[backdrop-filter]:bg-card/60">
       <div className="flex h-16 items-center px-6 gap-4">
@@ -21,9 +42,9 @@ export function DashboardHeader() {
         
         <div className="flex items-center gap-2">
           <img 
-            src="/placeholder.svg" 
-            alt="Tsheseng Unity Logo" 
-            className="h-8 w-8 rounded"
+            src={logo?.file_url || "/placeholder.svg"} 
+            alt={logo?.name || "Tsheseng Unity Logo"} 
+            className="h-8 w-8 rounded object-cover"
           />
           <div className="hidden md:block">
             <h1 className="text-lg font-semibold text-foreground">
