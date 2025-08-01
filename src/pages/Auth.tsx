@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,8 +11,40 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  useEffect(() => {
+    const fetchLogo = async () => {
+      try {
+        console.log('Fetching logo from documents for auth page...');
+        const { data: documents, error } = await supabase
+          .from('documents')
+          .select('name, file_url')
+          .or('name.ilike.%logo%,name.ilike.%Logo%,name.ilike.%LOGO%')
+          .limit(1);
+
+        console.log('Auth page logo query result:', { documents, error });
+
+        if (error) {
+          console.error('Error fetching logo for auth page:', error);
+          return;
+        }
+
+        if (documents && documents.length > 0) {
+          console.log('Logo found for auth page:', documents[0]);
+          setLogoUrl(documents[0].file_url);
+        } else {
+          console.log('No logo document found for auth page');
+        }
+      } catch (error) {
+        console.error('Error fetching logo for auth page:', error);
+      }
+    };
+
+    fetchLogo();
+  }, []);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,6 +122,25 @@ const Auth = () => {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
+          {logoUrl ? (
+            <div className="flex justify-center mb-4">
+              <img 
+                src={logoUrl} 
+                alt="Tsheseng Unity Enterprise Logo" 
+                className="h-20 w-20 object-contain rounded-lg"
+                onError={() => {
+                  console.error('Failed to load logo image on auth page:', logoUrl);
+                  setLogoUrl(null);
+                }}
+              />
+            </div>
+          ) : (
+            <div className="flex justify-center mb-4">
+              <div className="h-20 w-20 rounded-lg bg-muted/20 border-2 border-dashed border-muted-foreground/20 flex items-center justify-center">
+                <span className="text-muted-foreground text-xs text-center">No Logo</span>
+              </div>
+            </div>
+          )}
           <h1 className="text-3xl font-bold">Tsheseng Unity Enterprise</h1>
           <p className="text-muted-foreground mt-2">Co-operative Management System</p>
         </div>
