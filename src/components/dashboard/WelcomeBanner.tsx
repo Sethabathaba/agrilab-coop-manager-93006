@@ -30,14 +30,25 @@ export function WelcomeBanner() {
   useEffect(() => {
     const fetchLogo = async () => {
       try {
-        const { data: documents } = await supabase
+        console.log('Fetching logo from documents...');
+        const { data: documents, error } = await supabase
           .from('documents')
           .select('name, file_url')
-          .ilike('name', '%logo%')
+          .or('name.ilike.%logo%,name.ilike.%Logo%,name.ilike.%LOGO%')
           .limit(1);
 
+        console.log('Logo query result:', { documents, error });
+
+        if (error) {
+          console.error('Error fetching logo:', error);
+          return;
+        }
+
         if (documents && documents.length > 0) {
+          console.log('Logo found:', documents[0]);
           setLogoUrl(documents[0].file_url);
+        } else {
+          console.log('No logo document found in database');
         }
       } catch (error) {
         console.error('Error fetching logo:', error);
@@ -52,12 +63,20 @@ export function WelcomeBanner() {
       <CardContent className="p-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            {logoUrl && (
+            {logoUrl ? (
               <img 
                 src={logoUrl} 
                 alt="Tsheseng Unity Enterprise Logo" 
                 className="h-16 w-16 object-contain rounded-lg bg-white/10 p-2"
+                onError={() => {
+                  console.error('Failed to load logo image:', logoUrl);
+                  setLogoUrl(null);
+                }}
               />
+            ) : (
+              <div className="h-16 w-16 rounded-lg bg-white/10 p-2 flex items-center justify-center">
+                <span className="text-white/60 text-xs text-center">No Logo</span>
+              </div>
             )}
             <div>
               <h2 className="text-2xl font-bold mb-2">Welcome, {getUserName()}!</h2>
