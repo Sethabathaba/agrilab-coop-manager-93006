@@ -16,8 +16,10 @@ export type Database = {
     Tables: {
       documents: {
         Row: {
+          access_level: string
           category: string
           created_at: string
+          created_by: string | null
           description: string | null
           file_path: string
           file_size: number
@@ -28,8 +30,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          access_level?: string
           category: string
           created_at?: string
+          created_by?: string | null
           description?: string | null
           file_path: string
           file_size: number
@@ -40,8 +44,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          access_level?: string
           category?: string
           created_at?: string
+          created_by?: string | null
           description?: string | null
           file_path?: string
           file_size?: number
@@ -51,17 +57,138 @@ export type Database = {
           name?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "documents_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          appointed_at: string | null
+          appointed_by: string | null
+          created_at: string
+          email: string
+          full_name: string | null
+          id: string
+          member_id: string | null
+          phone: string | null
+          role: Database["public"]["Enums"]["user_role"]
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          appointed_at?: string | null
+          appointed_by?: string | null
+          created_at?: string
+          email: string
+          full_name?: string | null
+          id: string
+          member_id?: string | null
+          phone?: string | null
+          role?: Database["public"]["Enums"]["user_role"]
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          appointed_at?: string | null
+          appointed_by?: string | null
+          created_at?: string
+          email?: string
+          full_name?: string | null
+          id?: string
+          member_id?: string | null
+          phone?: string | null
+          role?: Database["public"]["Enums"]["user_role"]
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_appointed_by_fkey"
+            columns: ["appointed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      role_changes: {
+        Row: {
+          changed_by: string
+          created_at: string
+          id: string
+          new_role: Database["public"]["Enums"]["user_role"]
+          old_role: Database["public"]["Enums"]["user_role"] | null
+          reason: string | null
+          user_id: string
+        }
+        Insert: {
+          changed_by: string
+          created_at?: string
+          id?: string
+          new_role: Database["public"]["Enums"]["user_role"]
+          old_role?: Database["public"]["Enums"]["user_role"] | null
+          reason?: string | null
+          user_id: string
+        }
+        Update: {
+          changed_by?: string
+          created_at?: string
+          id?: string
+          new_role?: Database["public"]["Enums"]["user_role"]
+          old_role?: Database["public"]["Enums"]["user_role"] | null
+          reason?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_changes_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_changes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_current_user_role: {
+        Args: Record<PropertyKey, never>
+        Returns: Database["public"]["Enums"]["user_role"]
+      }
+      has_any_role: {
+        Args: { _roles: Database["public"]["Enums"]["user_role"][] }
+        Returns: boolean
+      }
+      has_role: {
+        Args: { _role: Database["public"]["Enums"]["user_role"] }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      user_role:
+        | "superuser"
+        | "administrator"
+        | "secretary"
+        | "treasurer"
+        | "board_member"
+        | "member"
+        | "viewer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -188,6 +315,16 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      user_role: [
+        "superuser",
+        "administrator",
+        "secretary",
+        "treasurer",
+        "board_member",
+        "member",
+        "viewer",
+      ],
+    },
   },
 } as const

@@ -1,4 +1,3 @@
-
 import { useState, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Upload, FileText, X } from "lucide-react";
 import { toast } from "sonner";
+import { useUserProfile } from "@/hooks/useUserProfile";
 
 const DOCUMENT_CATEGORIES = [
   { value: "minutes", label: "Meeting Minutes" },
@@ -21,6 +21,14 @@ const DOCUMENT_CATEGORIES = [
   { value: "other", label: "Other" },
 ];
 
+const ACCESS_LEVELS = [
+  { value: "public", label: "Public", description: "Anyone can view" },
+  { value: "members", label: "Members Only", description: "Active members can view" },
+  { value: "board", label: "Board Members", description: "Board members and above" },
+  { value: "financial", label: "Financial Access", description: "Treasurer and above" },
+  { value: "admin", label: "Admin Only", description: "Administrators only" },
+];
+
 interface DocumentUploadProps {
   onUploadSuccess: () => void;
 }
@@ -29,12 +37,14 @@ export function DocumentUpload({ onUploadSuccess }: DocumentUploadProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [category, setCategory] = useState("");
+  const [accessLevel, setAccessLevel] = useState("public");
   const [description, setDescription] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { profile, canUploadDocuments } = useUserProfile();
 
   const uploadMutation = useMutation({
-    mutationFn: async (formData: { files: File[], category: string, description: string }) => {
+    mutationFn: async (formData: { files: File[], category: string, accessLevel: string, description: string }) => {
       const uploads = await Promise.all(
         formData.files.map(async (file) => {
           // Upload file to Supabase Storage
@@ -63,7 +73,9 @@ export function DocumentUpload({ onUploadSuccess }: DocumentUploadProps) {
               file_size: file.size,
               file_type: file.type,
               category: formData.category,
+              access_level: formData.accessLevel,
               description: formData.description,
+              created_by: profile?.id,
             });
 
           if (dbError) throw dbError;
@@ -76,6 +88,7 @@ export function DocumentUpload({ onUploadSuccess }: DocumentUploadProps) {
       toast.success(`Successfully uploaded ${selectedFiles.length} document(s)`);
       setSelectedFiles([]);
       setCategory("");
+      setAccessLevel("public");
       setDescription("");
       setIsOpen(false);
       onUploadSuccess();
@@ -122,8 +135,28 @@ export function DocumentUpload({ onUploadSuccess }: DocumentUploadProps) {
       toast.error("Please select a category");
       return;
     }
-    uploadMutation.mutate({ files: selectedFiles, category, description });
+    uploadMutation.mutate({ files: selectedFiles, category, accessLevel, description });
   };
+
+  const getAvailableAccessLevels = () => {
+    if (!profile) return [];
+    
+    const availableLevels = ["public", "members"];
+    
+    if (profile.role === 'superuser' || profile.role === 'administrator') {
+      return ACCESS_LEVELS;
+    } else if (profile.role === 'secretary' || profile.role === 'board_member') {
+      availableLevels.push("board");
+    } else if (profile.role === 'treasurer') {
+      availableLevels.push("financial");
+    }
+    
+    return ACCESS_LEVELS.filter(level => availableLevels.includes(level.value));
+  };
+
+  if (!canUploadDocuments()) {
+    return null;
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -137,7 +170,7 @@ export function DocumentUpload({ onUploadSuccess }: DocumentUploadProps) {
         <DialogHeader>
           <DialogTitle>Upload Documents</DialogTitle>
           <DialogDescription>
-            Upload cooperative documents, meeting minutes, or reports
+            Upload cooperative documents with appropriate access controls
           </DialogDescription>
         </DialogHeader>
 
@@ -206,6 +239,26 @@ export function DocumentUpload({ onUploadSuccess }: DocumentUploadProps) {
                 {DOCUMENT_CATEGORIES.map((cat) => (
                   <SelectItem key={cat.value} value={cat.value}>
                     {cat.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Access Level Selection */}
+          <div className="space-y-2">
+            <Label htmlFor="accessLevel">Access Level *</Label>
+            <Select value={accessLevel} onValueChange={setAccessLevel}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select access level" />
+              </SelectTrigger>
+              <SelectContent>
+                {getAvailableAccessLevels().map((level) => (
+                  <SelectItem key={level.value} value={level.value}>
+                    <div>
+                      <div className="font-medium">{level.label}</div>
+                      <div className="text-xs text-muted-foreground">{level.description}</div>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>

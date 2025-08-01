@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { FileText, Download, Trash2, Eye, Calendar } from "lucide-react";
+import { FileText, Download, Trash2, Eye, Calendar, Shield } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
+import { useUserProfile } from "@/hooks/useUserProfile";
 
 interface DocumentRecord {
   id: string;
@@ -17,9 +18,11 @@ interface DocumentRecord {
   file_size: number;
   file_type: string;
   category: string;
+  access_level: string;
   description?: string;
   created_at: string;
   updated_at: string;
+  created_by?: string;
 }
 
 interface DocumentListProps {
@@ -54,6 +57,28 @@ const getCategoryColor = (category: string) => {
   return colors[category] || colors.other;
 };
 
+const getAccessLevelLabel = (level: string) => {
+  const levels: Record<string, string> = {
+    public: "Public",
+    members: "Members",
+    board: "Board",
+    financial: "Financial",
+    admin: "Admin"
+  };
+  return levels[level] || level;
+};
+
+const getAccessLevelColor = (level: string) => {
+  const colors: Record<string, string> = {
+    public: "bg-slate-100 text-slate-800",
+    members: "bg-blue-100 text-blue-800",
+    board: "bg-purple-100 text-purple-800",
+    financial: "bg-green-100 text-green-800",
+    admin: "bg-red-100 text-red-800"
+  };
+  return colors[level] || colors.public;
+};
+
 const formatFileSize = (bytes: number) => {
   if (bytes === 0) return '0 Bytes';
   const k = 1024;
@@ -63,6 +88,8 @@ const formatFileSize = (bytes: number) => {
 };
 
 export function DocumentList({ documents, isLoading, onDeleteSuccess }: DocumentListProps) {
+  const { profile, hasAnyRole } = useUserProfile();
+
   const deleteMutation = useMutation({
     mutationFn: async (documentRecord: DocumentRecord) => {
       // Delete from storage
@@ -112,6 +139,14 @@ export function DocumentList({ documents, isLoading, onDeleteSuccess }: Document
 
   const handleView = (documentRecord: DocumentRecord) => {
     window.open(documentRecord.file_url, '_blank');
+  };
+
+  const canDeleteDocument = (documentRecord: DocumentRecord) => {
+    if (!profile) return false;
+    return (
+      hasAnyRole(['superuser', 'administrator']) ||
+      documentRecord.created_by === profile.id
+    );
   };
 
   if (isLoading) {
@@ -166,9 +201,15 @@ export function DocumentList({ documents, isLoading, onDeleteSuccess }: Document
             </div>
 
             <div className="space-y-2 mb-4">
-              <Badge className={getCategoryColor(documentRecord.category)}>
-                {getCategoryLabel(documentRecord.category)}
-              </Badge>
+              <div className="flex gap-2">
+                <Badge className={getCategoryColor(documentRecord.category)}>
+                  {getCategoryLabel(documentRecord.category)}
+                </Badge>
+                <Badge className={getAccessLevelColor(documentRecord.access_level)} variant="outline">
+                  <Shield className="h-3 w-3 mr-1" />
+                  {getAccessLevelLabel(documentRecord.access_level)}
+                </Badge>
+              </div>
               <p className="text-xs text-muted-foreground">
                 {formatFileSize(documentRecord.file_size)}
               </p>
@@ -198,30 +239,32 @@ export function DocumentList({ documents, isLoading, onDeleteSuccess }: Document
                 <Download className="h-3 w-3 mr-1" />
                 Download
               </Button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete Document</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Are you sure you want to delete "{documentRecord.name}"? This action cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => deleteMutation.mutate(documentRecord)}
-                      disabled={deleteMutation.isPending}
-                    >
-                      {deleteMutation.isPending ? "Deleting..." : "Delete"}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              {canDeleteDocument(documentRecord) && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete Document</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to delete "{documentRecord.name}"? This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => deleteMutation.mutate(documentRecord)}
+                        disabled={deleteMutation.isPending}
+                      >
+                        {deleteMutation.isPending ? "Deleting..." : "Delete"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
             </div>
           </CardContent>
         </Card>
