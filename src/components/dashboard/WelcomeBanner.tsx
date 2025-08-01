@@ -32,15 +32,12 @@ export function WelcomeBanner() {
       try {
         const { data: documents } = await supabase
           .from('documents')
-          .select('file_name, file_path')
-          .ilike('file_name', '%logo%')
+          .select('name, file_url')
+          .ilike('name', '%logo%')
           .limit(1);
 
         if (documents && documents.length > 0) {
-          const { data } = supabase.storage
-            .from('documents')
-            .getPublicUrl(documents[0].file_path);
-          setLogoUrl(data.publicUrl);
+          setLogoUrl(documents[0].file_url);
         }
       } catch (error) {
         console.error('Error fetching logo:', error);
