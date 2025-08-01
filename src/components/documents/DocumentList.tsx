@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,7 +9,7 @@ import { FileText, Download, Trash2, Eye, Calendar } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 
-interface Document {
+interface DocumentRecord {
   id: string;
   name: string;
   file_path: string;
@@ -24,7 +23,7 @@ interface Document {
 }
 
 interface DocumentListProps {
-  documents: Document[];
+  documents: DocumentRecord[];
   isLoading: boolean;
   onDeleteSuccess: () => void;
 }
@@ -65,11 +64,11 @@ const formatFileSize = (bytes: number) => {
 
 export function DocumentList({ documents, isLoading, onDeleteSuccess }: DocumentListProps) {
   const deleteMutation = useMutation({
-    mutationFn: async (document: Document) => {
+    mutationFn: async (documentRecord: DocumentRecord) => {
       // Delete from storage
       const { error: storageError } = await supabase.storage
         .from('documents')
-        .remove([document.file_path]);
+        .remove([documentRecord.file_path]);
 
       if (storageError) throw storageError;
 
@@ -77,7 +76,7 @@ export function DocumentList({ documents, isLoading, onDeleteSuccess }: Document
       const { error: dbError } = await supabase
         .from('documents')
         .delete()
-        .eq('id', document.id);
+        .eq('id', documentRecord.id);
 
       if (dbError) throw dbError;
     },
@@ -90,29 +89,29 @@ export function DocumentList({ documents, isLoading, onDeleteSuccess }: Document
     },
   });
 
-  const handleDownload = async (document: Document) => {
+  const handleDownload = async (documentRecord: DocumentRecord) => {
     try {
       const { data, error } = await supabase.storage
         .from('documents')
-        .download(document.file_path);
+        .download(documentRecord.file_path);
 
       if (error) throw error;
 
       const url = URL.createObjectURL(data);
-      const a = document.createElement('a');
+      const a = globalThis.document.createElement('a');
       a.href = url;
-      a.download = document.name;
-      document.body.appendChild(a);
+      a.download = documentRecord.name;
+      globalThis.document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
+      globalThis.document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (error) {
       toast.error("Failed to download document");
     }
   };
 
-  const handleView = (document: Document) => {
-    window.open(document.file_url, '_blank');
+  const handleView = (documentRecord: DocumentRecord) => {
+    window.open(documentRecord.file_url, '_blank');
   };
 
   if (isLoading) {
@@ -148,18 +147,18 @@ export function DocumentList({ documents, isLoading, onDeleteSuccess }: Document
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {documents.map((document) => (
-        <Card key={document.id} className="hover:shadow-md transition-shadow">
+      {documents.map((documentRecord) => (
+        <Card key={documentRecord.id} className="hover:shadow-md transition-shadow">
           <CardContent className="p-4">
             <div className="flex items-start justify-between mb-3">
               <div className="flex-1 min-w-0">
-                <h4 className="font-medium text-foreground truncate" title={document.name}>
-                  {document.name}
+                <h4 className="font-medium text-foreground truncate" title={documentRecord.name}>
+                  {documentRecord.name}
                 </h4>
                 <div className="flex items-center gap-2 mt-1">
                   <Calendar className="h-3 w-3 text-muted-foreground" />
                   <span className="text-xs text-muted-foreground">
-                    {formatDistanceToNow(new Date(document.created_at), { addSuffix: true })}
+                    {formatDistanceToNow(new Date(documentRecord.created_at), { addSuffix: true })}
                   </span>
                 </div>
               </div>
@@ -167,15 +166,15 @@ export function DocumentList({ documents, isLoading, onDeleteSuccess }: Document
             </div>
 
             <div className="space-y-2 mb-4">
-              <Badge className={getCategoryColor(document.category)}>
-                {getCategoryLabel(document.category)}
+              <Badge className={getCategoryColor(documentRecord.category)}>
+                {getCategoryLabel(documentRecord.category)}
               </Badge>
               <p className="text-xs text-muted-foreground">
-                {formatFileSize(document.file_size)}
+                {formatFileSize(documentRecord.file_size)}
               </p>
-              {document.description && (
+              {documentRecord.description && (
                 <p className="text-sm text-muted-foreground line-clamp-2">
-                  {document.description}
+                  {documentRecord.description}
                 </p>
               )}
             </div>
@@ -184,7 +183,7 @@ export function DocumentList({ documents, isLoading, onDeleteSuccess }: Document
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handleView(document)}
+                onClick={() => handleView(documentRecord)}
                 className="flex-1"
               >
                 <Eye className="h-3 w-3 mr-1" />
@@ -193,7 +192,7 @@ export function DocumentList({ documents, isLoading, onDeleteSuccess }: Document
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handleDownload(document)}
+                onClick={() => handleDownload(documentRecord)}
                 className="flex-1"
               >
                 <Download className="h-3 w-3 mr-1" />
@@ -209,13 +208,13 @@ export function DocumentList({ documents, isLoading, onDeleteSuccess }: Document
                   <AlertDialogHeader>
                     <AlertDialogTitle>Delete Document</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Are you sure you want to delete "{document.name}"? This action cannot be undone.
+                      Are you sure you want to delete "{documentRecord.name}"? This action cannot be undone.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
-                      onClick={() => deleteMutation.mutate(document)}
+                      onClick={() => deleteMutation.mutate(documentRecord)}
                       disabled={deleteMutation.isPending}
                     >
                       {deleteMutation.isPending ? "Deleting..." : "Delete"}
