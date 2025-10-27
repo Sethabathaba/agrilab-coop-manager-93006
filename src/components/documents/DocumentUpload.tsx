@@ -139,15 +139,15 @@ export function DocumentUpload({ onUploadSuccess }: DocumentUploadProps) {
   };
 
   const getAvailableAccessLevels = () => {
-    if (!profile) return [];
+    if (!primaryRole) return [];
     
     const availableLevels = ["public", "members"];
     
-    if (profile.role === 'superuser' || profile.role === 'administrator') {
+    if (primaryRole === 'superuser' || primaryRole === 'administrator') {
       return ACCESS_LEVELS;
-    } else if (profile.role === 'secretary' || profile.role === 'board_member') {
+    } else if (primaryRole === 'secretary' || primaryRole === 'board_member') {
       availableLevels.push("board");
-    } else if (profile.role === 'treasurer') {
+    } else if (primaryRole === 'treasurer') {
       availableLevels.push("financial");
     }
     

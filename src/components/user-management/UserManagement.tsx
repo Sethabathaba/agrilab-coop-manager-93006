@@ -9,7 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UserPlus, Users, Shield } from "lucide-react";
 import { toast } from "sonner";
-import { useUserProfile, UserProfile, UserRole } from "@/hooks/useUserProfile";
+import { useUserProfile, UserProfile, UserRole, UserRoleData } from "@/hooks/useUserProfile";
+
+interface UserWithRoles extends UserProfile {
+  roles: UserRoleData[];
+  primaryRole?: UserRole;
+}
 
 const ROLE_LABELS: Record<UserRole, string> = {
   superuser: "Super User",
@@ -33,19 +38,39 @@ const ROLE_COLORS: Record<UserRole, string> = {
 
 export function UserManagement() {
   const { profile: currentUser, canManageUsers } = useUserProfile();
-  const [selectedRole, setSelectedRole] = useState<UserRole>('viewer');
   const queryClient = useQueryClient();
 
   const { data: users, isLoading } = useQuery({
-    queryKey: ['users'],
+    queryKey: ['usersWithRoles'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Fetch all profiles
+      const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      return data as UserProfile[];
+      if (profilesError) throw profilesError;
+
+      // Fetch all user roles
+      const { data: allRoles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('*');
+
+      if (rolesError) throw rolesError;
+
+      // Combine profiles with their roles
+      const usersWithRoles: UserWithRoles[] = profiles.map(profile => {
+        const userRoles = allRoles.filter(r => r.user_id === profile.id);
+        const primaryRole = userRoles[0]?.role;
+        
+        return {
+          ...profile,
+          roles: userRoles,
+          primaryRole
+        };
+      });
+
+      return usersWithRoles;
     },
     enabled: canManageUsers(),
   });
@@ -55,58 +80,51 @@ export function UserManagement() {
       const user = users?.find(u => u.id === userId);
       if (!user) throw new Error('User not found');
 
-      // Update user role
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ 
-          role: newRole, 
-          status: 'active',
+      const oldRole = user.primaryRole;
+
+      // Delete existing role for this user (single role per user)
+      const { error: deleteError } = await supabase
+        .from('user_roles')
+        .delete()
+        .eq('user_id', userId);
+
+      if (deleteError) throw deleteError;
+
+      // Insert new role
+      const { error: insertError } = await supabase
+        .from('user_roles')
+        .insert({
+          user_id: userId,
+          role: newRole,
           appointed_by: currentUser?.id,
           appointed_at: new Date().toISOString()
-        })
-        .eq('id', userId);
+        });
 
-      if (updateError) throw updateError;
+      if (insertError) throw insertError;
 
       // Log role change
       const { error: logError } = await supabase
         .from('role_changes')
         .insert({
           user_id: userId,
-          old_role: user.role,
+          old_role: oldRole || 'viewer',
           new_role: newRole,
           changed_by: currentUser?.id,
-          reason: reason || `Role changed from ${ROLE_LABELS[user.role]} to ${ROLE_LABELS[newRole]}`
+          reason: reason || `Role changed from ${oldRole ? ROLE_LABELS[oldRole] : 'None'} to ${ROLE_LABELS[newRole]}`
         });
 
       if (logError) console.error('Failed to log role change:', logError);
     },
     onSuccess: () => {
       toast.success("User role updated successfully");
-      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['usersWithRoles'] });
+      queryClient.invalidateQueries({ queryKey: ['userRoles'] });
     },
     onError: (error) => {
       toast.error("Failed to update user role: " + error.message);
     },
   });
 
-  const updateStatusMutation = useMutation({
-    mutationFn: async ({ userId, status }: { userId: string, status: 'active' | 'inactive' | 'pending' }) => {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ status })
-        .eq('id', userId);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success("User status updated successfully");
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-    },
-    onError: (error) => {
-      toast.error("Failed to update user status: " + error.message);
-    },
-  });
 
   if (!canManageUsers()) {
     return (
@@ -149,7 +167,7 @@ export function UserManagement() {
                     <TableHead>Status</TableHead>
                     <TableHead>Member ID</TableHead>
                     <TableHead>Appointed By</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead>Manage Role</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -162,64 +180,47 @@ export function UserManagement() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge className={ROLE_COLORS[user.role]}>
-                          {ROLE_LABELS[user.role]}
-                        </Badge>
+                        {user.primaryRole ? (
+                          <Badge className={ROLE_COLORS[user.primaryRole]}>
+                            {ROLE_LABELS[user.primaryRole]}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline">No Role</Badge>
+                        )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={
-                          user.status === 'active' ? 'default' : 
-                          user.status === 'pending' ? 'secondary' : 'destructive'
-                        }>
-                          {user.status}
+                        <Badge variant="default">
+                          Active
                         </Badge>
                       </TableCell>
                       <TableCell>{user.member_id || 'Not assigned'}</TableCell>
                       <TableCell>
-                        {user.appointed_by ? (
+                        {user.roles[0]?.appointed_by ? (
                           <div className="text-sm">
-                            {users?.find(u => u.id === user.appointed_by)?.full_name || 'Unknown'}
+                            {users?.find(u => u.id === user.roles[0].appointed_by)?.full_name || 'Unknown'}
                           </div>
                         ) : (
-                          'Auto-registered'
+                          'Not assigned'
                         )}
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
-                          <Select
-                            value={user.role}
-                            onValueChange={(newRole: UserRole) => 
-                              updateRoleMutation.mutate({ userId: user.id, newRole })
-                            }
-                          >
-                            <SelectTrigger className="w-40">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {Object.entries(ROLE_LABELS).map(([role, label]) => (
-                                <SelectItem key={role} value={role}>
-                                  {label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          
-                          <Select
-                            value={user.status}
-                            onValueChange={(status: 'active' | 'inactive' | 'pending') => 
-                              updateStatusMutation.mutate({ userId: user.id, status })
-                            }
-                          >
-                            <SelectTrigger className="w-32">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="active">Active</SelectItem>
-                              <SelectItem value="inactive">Inactive</SelectItem>
-                              <SelectItem value="pending">Pending</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
+                        <Select
+                          value={user.primaryRole || ''}
+                          onValueChange={(newRole: UserRole) => 
+                            updateRoleMutation.mutate({ userId: user.id, newRole })
+                          }
+                        >
+                          <SelectTrigger className="w-40">
+                            <SelectValue placeholder="Assign role" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(ROLE_LABELS).map(([role, label]) => (
+                              <SelectItem key={role} value={role}>
+                                {label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </TableCell>
                     </TableRow>
                   ))}
